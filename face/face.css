@@ -1,0 +1,30 @@
+/* HORIZON's face, in the look of Mixtape 2's HORIZON (its CSS in mixtape2/Devices/horizon.js): laid out 1400 x 788 and scaled to the window */
+html,body{margin:0;height:100%;background:#05080F;overflow:hidden}
+.hz{position:fixed;inset:0;font-family:Bahnschrift,"DIN Alternate","Avenir Next Condensed","Segoe UI",Arial,sans-serif;color:#F4F6FF;user-select:none;-webkit-user-select:none;cursor:default;
+  background:#05080F url(mountains.jpg) center/cover}
+.hz canvas.sky{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
+.hz .ui{position:absolute;left:50%;bottom:0;width:1400px;height:788px;transform:translateX(-50%);transform-origin:50% 100%;pointer-events:none}
+.hz .ui>*{pointer-events:auto}
+/* clear glass; every word on it bright, with a soft dark shadow, so it reads over the brightest aurora */
+.hz .glass{background:rgba(6,8,20,.38);border:1px solid rgba(255,255,255,.15);border-radius:18px;box-shadow:0 12px 44px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.14);
+  text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 7px rgba(0,0,0,.7);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.hz .bar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);height:84px;display:flex;align-items:center;gap:10px;padding:0 22px 0 28px;white-space:nowrap;box-sizing:border-box}
+.hz .word{font-weight:300;font-size:26px;letter-spacing:10px;background:linear-gradient(90deg,#FFB27A,#FF7AA8 45%,#B9A2FF);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.9))}
+.hz .dots{display:flex;flex-direction:column;gap:5px;margin-left:4px}
+.hz .dot{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:1.5px;color:#E6EAF8}
+.hz .dot i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.2);transition:background .08s}
+.hz .dot i.on{background:#FF9A50;box-shadow:0 0 10px #FF7A3C}
+.hz .sep{width:1px;height:42px;background:rgba(255,255,255,.14);margin:0 6px}
+.hz .lcd{width:250px;display:flex;flex-direction:column;align-items:center;line-height:1.3;pointer-events:none}
+.hz .lcd b{font-weight:600;font-size:16px;letter-spacing:2.6px;color:#FFFFFF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.hz .lcd span{font-size:12px;letter-spacing:1.5px;color:#FFD2BC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* a knob: a ring of its colour as far as it is turned, a dark cap with a pointer, its name and value under it */
+.hz .kn{width:92px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:ns-resize;touch-action:none}
+.hz .kn .cap{--v:.5;width:48px;height:48px;border-radius:50%;position:relative;background:conic-gradient(from 225deg,var(--c) calc(var(--v)*270deg),rgba(255,255,255,.16) 0 270deg,transparent 0)}
+.hz .kn .cap::before{content:"";position:absolute;inset:5px;border-radius:50%;background:radial-gradient(circle at 45% 35%,#4A4E66,#141620 70%);box-shadow:0 2px 4px rgba(0,0,0,.6)}
+.hz .kn .cap i{position:absolute;left:50%;top:8px;width:3px;height:13px;margin-left:-1.5px;border-radius:2px;background:#FFF2E8;transform-origin:50% 16px;z-index:1;pointer-events:none}
+.hz .kn b,.hz .kn em{pointer-events:none}
+.hz .kn b{font-weight:600;font-size:11px;letter-spacing:1.2px;color:#EEF2FF;line-height:13px}
+.hz .kn em{font-style:normal;font-size:11px;color:color-mix(in srgb,var(--c) 70%,#fff);font-family:Menlo,Consolas,monospace;line-height:13px;height:13px}
+.hz .kn:hover .cap::before{filter:brightness(1.25)}
+.hz .credit{position:absolute;left:18px;top:14px;padding:6px 12px;border-radius:12px;font-size:11px;letter-spacing:1px;color:#DDE3F5;opacity:.75}

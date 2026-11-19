@@ -1,0 +1,138 @@
+# Builds HORIZON on GitHub's own computers (nothing is installed on Steve's laptop):
+#   Mac:     AU + VST3 + stand-alone app, one file for both Intel and Apple Silicon, macOS 11 or later; checked by auval and pluginval
+#   Windows: VST3 + stand-alone app (64-bit); checked by pluginval
+# The zips are kept on each run (Actions > the run > Artifacts), and every push to main also refreshes the "latest-build"
+# release, whose links work for anyone without signing in:
+#   https://github.com/steturne/horizon-plugin/releases/tag/latest-build
+name: Build HORIZON
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PLUGINVAL: v1.0.4
+  WEBVIEW2: 1.0.3485.44
+
+jobs:
+  mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Sign for this Mac only (ad hoc) and check both processors are in
+        run: |
+          A=build/Horizon_artefacts/Release
+          for b in "$A/AU/HORIZON.component" "$A/VST3/HORIZON.vst3" "$A/Standalone/HORIZON.app"; do
+            codesign --force --deep --sign - "$b"
+            lipo -archs "$b/Contents/MacOS/HORIZON"
+            ls "$b/Contents/Resources/Salamander Grand" | wc -l
+          done
+
+      - name: auval (Apple's Audio Unit test)
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/Horizon_artefacts/Release/AU/HORIZON.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -a | grep -i "Stvt" || true
+          auval -strict -v aumu Hrzn Stvt
+
+      - name: pluginval (AU and VST3)
+        run: |
+          curl -sSL -o pv.zip "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL}/pluginval_macOS.zip"
+          unzip -q pv.zip
+          PV=pluginval.app/Contents/MacOS/pluginval
+          $PV --strictness-level 5 --validate-in-process --timeout-ms 300000 --validate build/Horizon_artefacts/Release/VST3/HORIZON.vst3
+          $PV --strictness-level 5 --validate-in-process --timeout-ms 300000 --validate ~/Library/Audio/Plug-Ins/Components/HORIZON.component
+
+      - name: Zip
+        run: |
+          A=build/Horizon_artefacts/Release
+          mkdir -p out
+          ditto -c -k --keepParent "$A/AU/HORIZON.component" out/HORIZON-Mac-AU.zip
+          ditto -c -k --keepParent "$A/VST3/HORIZON.vst3" out/HORIZON-Mac-VST3.zip
+          ditto -c -k --keepParent "$A/Standalone/HORIZON.app" out/HORIZON-Mac-App.zip
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HORIZON-Mac
+          path: out/*.zip
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the WebView2 kit (Microsoft's, for the plugin window)
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'nuget'
+          $dir = Join-Path $root "Microsoft.Web.WebView2.$env:WEBVIEW2"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Invoke-WebRequest "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$env:WEBVIEW2" -OutFile "$env:RUNNER_TEMP\wv2.zip"
+          Expand-Archive "$env:RUNNER_TEMP\wv2.zip" $dir -Force
+          "WV2_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64 "-DJUCE_WEBVIEW2_PACKAGE_LOCATION=$env:WV2_ROOT"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: pluginval (VST3)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/Tracktion/pluginval/releases/download/$env:PLUGINVAL/pluginval_Windows.zip" -OutFile pv.zip
+          Expand-Archive pv.zip pv -Force
+          Get-ChildItem "build\Horizon_artefacts\Release\VST3\HORIZON.vst3" -Recurse | Select-Object -ExpandProperty FullName
+          .\pv\pluginval.exe --strictness-level 5 --validate-in-process --timeout-ms 300000 --validate "build\Horizon_artefacts\Release\VST3\HORIZON.vst3"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Compress-Archive "build\Horizon_artefacts\Release\VST3\HORIZON.vst3" out\HORIZON-Windows-VST3.zip
+          New-Item -ItemType Directory -Force app\HORIZON | Out-Null
+          Copy-Item build\Horizon_artefacts\Release\Standalone\HORIZON.exe app\HORIZON\
+          Copy-Item "build\Horizon_artefacts\Release\Standalone\Salamander Grand" app\HORIZON\ -Recurse
+          Compress-Archive app\HORIZON out\HORIZON-Windows-App.zip
+          Get-ChildItem out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HORIZON-Windows
+          path: out/*.zip
+
+  release:
+    # every green build of main replaces the "latest-build" release, so its download links always give the newest
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+          merge-multiple: true
+      - name: Replace the latest-build release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -la dl
+          gh release delete latest-build --yes --cleanup-tag || true
+          gh release create latest-build dl/*.zip --target "${{ github.sha }}" --prerelease \
+            --title "HORIZON - latest build" \
+            --notes "Built from ${{ github.sha }} on $(date -u '+%Y-%m-%d %H:%M UTC'). Install steps: see the README. The piano is the Salamander Grand Piano by Alexander Holm (CC BY 3.0)."

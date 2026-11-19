@@ -18,7 +18,7 @@ env:
 
 jobs:
   mac:
-    runs-on: macos-15
+    runs-on: macos-15-intel   # Intel, as Steve's MacBook (the Apple-chip Macs are often short at GitHub); still builds for both
     steps:
       - uses: actions/checkout@v4
 

@@ -51,8 +51,9 @@ void HorizonEditor::timerCallback()
     o->setProperty ("pedal", proc.engine.pedalDown());
     const int h = proc.engine.hits();
     if (h != lastHits) { lastHits = h; o->setProperty ("hit", proc.engine.lastHitVelocity()); }
-    const auto s = proc.library->status();
-    if (s != lastStatus) { lastStatus = s; o->setProperty ("status", s); }
+    /* the loading state every time (not only when it changes): a window opened, or a page still starting, after the piano was
+       ready would otherwise never hear it and keep saying TUNING */
+    o->setProperty ("status", proc.library->status());
     web.emitEventIfBrowserIsVisible ("sky", juce::var (o));
 }
 

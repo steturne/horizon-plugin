@@ -96,7 +96,7 @@ function onSky(e) {
   level = +e.level || 0;
   light.pedal.classList.toggle('on', !!e.pedal);
   if (e.hit != null) { hit(+e.hit); light.kin.classList.add('on'); clearTimeout(kinT); kinT = setTimeout(() => light.kin.classList.remove('on'), 120); }
-  if (e.status != null) { status = String(e.status); lcd(); }
+  if (e.status != null && String(e.status) !== status) { status = String(e.status); lcd(); }
 }
 if (IN_PLUGIN) window.__JUCE__.backend.addEventListener('sky', onSky);
 else skyc.addEventListener('pointerdown', () => { pretend = Math.min(.6, pretend + .12); onSky({ level: 0, hit: 100 }); });   /* in a browser: a pretend note */

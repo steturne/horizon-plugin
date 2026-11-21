@@ -71,6 +71,7 @@ void SampleLibrary::run()
         if (++done % 8 == 0) setStatus ("TUNING... " + juce::String (done * 100 / juce::jmax (1, files.size())) + "%");
     }
     if (set->count() == 0) { setStatus ("NO PIANO SAMPLES"); return; }
+    set->finish();                                   // how the layers of each key line up (measured once)
     owned = std::move (set);
     ready.store (owned.get(), std::memory_order_release);
     setStatus ({});

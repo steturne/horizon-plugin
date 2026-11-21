@@ -1,8 +1,12 @@
 /* HORIZON as a plugin: MIDI in, stereo out. The sound is horizon::Engine (core/, no JUCE); this file only joins it to the DAW:
-   the three knobs as automatable parameters (LEVEL, HALL, RELEASE), MIDI notes and the sustain pedal, and saving with the song. */
+   every HORIZON control as an automatable parameter (Params.h), MIDI notes and the sustain pedal, the DAW's tempo (for the DELAY
+   and REVERSE in beats), and saving with the song. */
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <map>
+#include <string>
 #include "../core/HorizonEngine.h"
+#include "Params.h"
 #include "SampleLibrary.h"
 
 class HorizonProcessor : public juce::AudioProcessor
@@ -24,7 +28,7 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 4.0; }
+    double getTailLengthSeconds() const override { return 8.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -38,11 +42,15 @@ public:
     juce::AudioProcessorValueTreeState state;
     horizon::Engine engine;
     std::shared_ptr<SampleLibrary> library;
+    std::atomic<bool> panicNow { false };            // PANIC on the face: every note stopped on the next block
+
+    /* a parameter's value as text for the DAW (the same words HORIZON's face shows) */
+    juce::String textOf (const juce::String& id, float v) const;
+    float raw (const char* id) const;
 
 private:
-    std::atomic<float>* level = nullptr;
-    std::atomic<float>* hall = nullptr;
-    std::atomic<float>* release = nullptr;
-    static juce::AudioProcessorValueTreeState::ParameterLayout layout();
+    std::map<std::string, std::atomic<float>*, std::less<>> rawById;   // (looked up by plain text: nothing made on the audio thread)
+    void fill (horizon::Settings&) const;
+    juce::AudioProcessorValueTreeState::ParameterLayout layout();
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HorizonProcessor)
 };

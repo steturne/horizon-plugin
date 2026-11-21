@@ -1,4 +1,5 @@
-/* HORIZON's face, in the look of Mixtape 2's HORIZON (its CSS in mixtape2/Devices/horizon.js): laid out 1400 x 788 and scaled to the window */
+/* HORIZON's face, in the look of Mixtape 2's HORIZON (its CSS in mixtape2/Devices/horizon.js, as at full screen): laid out
+   1400 x 788 and scaled to the window. Twelve strips of 104 px, 6 px apart; a strip 408 px high; the bar 62 px. */
 html,body{margin:0;height:100%;background:#05080F;overflow:hidden}
 .hz{position:fixed;inset:0;font-family:Bahnschrift,"DIN Alternate","Avenir Next Condensed","Segoe UI",Arial,sans-serif;color:#F4F6FF;user-select:none;-webkit-user-select:none;cursor:default;
   background:#05080F url(mountains.jpg) center/cover}
@@ -6,25 +7,72 @@ html,body{margin:0;height:100%;background:#05080F;overflow:hidden}
 .hz .ui{position:absolute;left:50%;bottom:0;width:1400px;height:788px;transform:translateX(-50%);transform-origin:50% 100%;pointer-events:none}
 .hz .ui>*{pointer-events:auto}
 /* clear glass; every word on it bright, with a soft dark shadow, so it reads over the brightest aurora */
-.hz .glass{background:rgba(6,8,20,.38);border:1px solid rgba(255,255,255,.15);border-radius:18px;box-shadow:0 12px 44px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.14);
-  text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 7px rgba(0,0,0,.7);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
-.hz .bar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);height:84px;display:flex;align-items:center;gap:10px;padding:0 22px 0 28px;white-space:nowrap;box-sizing:border-box}
-.hz .word{font-weight:300;font-size:26px;letter-spacing:10px;background:linear-gradient(90deg,#FFB27A,#FF7AA8 45%,#B9A2FF);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.9))}
-.hz .dots{display:flex;flex-direction:column;gap:5px;margin-left:4px}
-.hz .dot{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:1.5px;color:#E6EAF8}
-.hz .dot i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.2);transition:background .08s}
+.hz .glass{background:rgba(6,8,20,.38);border:1px solid rgba(255,255,255,.15);border-radius:18px;box-shadow:0 12px 44px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.14);text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 7px rgba(0,0,0,.7)}
+.hz .bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);height:62px;display:flex;align-items:center;gap:7px;padding:0 16px 0 22px;white-space:nowrap;box-sizing:border-box}
+.hz .word{font-weight:300;font-size:20px;letter-spacing:8px;background:linear-gradient(90deg,#FFB27A,#FF7AA8 45%,#B9A2FF);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.9))}
+.hz .dots{display:flex;flex-direction:column;gap:3px;margin-left:2px}
+.hz .dot{display:flex;align-items:center;gap:6px;font-size:9px;letter-spacing:1.5px;color:#E6EAF8}.hz .dot i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2)}
 .hz .dot i.on{background:#FF9A50;box-shadow:0 0 10px #FF7A3C}
-.hz .sep{width:1px;height:42px;background:rgba(255,255,255,.14);margin:0 6px}
-.hz .lcd{width:250px;display:flex;flex-direction:column;align-items:center;line-height:1.3;pointer-events:none}
-.hz .lcd b{font-weight:600;font-size:16px;letter-spacing:2.6px;color:#FFFFFF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.hz .lcd span{font-size:12px;letter-spacing:1.5px;color:#FFD2BC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-/* a knob: a ring of its colour as far as it is turned, a dark cap with a pointer, its name and value under it */
-.hz .kn{width:92px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:ns-resize;touch-action:none}
-.hz .kn .cap{--v:.5;width:48px;height:48px;border-radius:50%;position:relative;background:conic-gradient(from 225deg,var(--c) calc(var(--v)*270deg),rgba(255,255,255,.16) 0 270deg,transparent 0)}
-.hz .kn .cap::before{content:"";position:absolute;inset:5px;border-radius:50%;background:radial-gradient(circle at 45% 35%,#4A4E66,#141620 70%);box-shadow:0 2px 4px rgba(0,0,0,.6)}
-.hz .kn .cap i{position:absolute;left:50%;top:8px;width:3px;height:13px;margin-left:-1.5px;border-radius:2px;background:#FFF2E8;transform-origin:50% 16px;z-index:1;pointer-events:none}
-.hz .kn b,.hz .kn em{pointer-events:none}
-.hz .kn b{font-weight:600;font-size:11px;letter-spacing:1.2px;color:#EEF2FF;line-height:13px}
-.hz .kn em{font-style:normal;font-size:11px;color:color-mix(in srgb,var(--c) 70%,#fff);font-family:Menlo,Consolas,monospace;line-height:13px;height:13px}
-.hz .kn:hover .cap::before{filter:brightness(1.25)}
-.hz .credit{position:absolute;left:18px;top:14px;padding:6px 12px;border-radius:12px;font-size:11px;letter-spacing:1px;color:#DDE3F5;opacity:.75}
+.hz .sep{width:1px;height:32px;background:rgba(255,255,255,.14);margin:0 3px}
+.hz .lcd{width:240px;display:flex;flex-direction:column;align-items:center;line-height:1.25;pointer-events:none}
+.hz .lcd b{font-weight:600;font-size:13.5px;letter-spacing:2.4px;color:#FFFFFF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.hz .lcd span{font-size:10px;letter-spacing:1.5px;color:#FFD2BC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.hz .pill{display:flex;background:rgba(0,0,0,.3);border-radius:11px;padding:2px}
+.hz .pill span{font-size:11px;letter-spacing:1.5px;padding:7px 9px;border-radius:9px;color:#EEF2FF;cursor:pointer}.hz .pill span.on{background:rgba(255,122,60,.32);color:#FFFFFF;box-shadow:inset 0 0 0 1px rgba(255,122,60,.65)}
+.hz .mod{position:relative;font-size:11.5px;letter-spacing:1.6px;padding:8px 9px;border-radius:10px;color:#EEF2FF;cursor:pointer}
+.hz .mod::after{content:'';position:absolute;left:50%;bottom:3px;width:14px;height:2px;margin-left:-7px;border-radius:2px;background:var(--c);opacity:.85}
+.hz .mod:hover{background:rgba(255,255,255,.08)}
+.hz .mod.on{color:#fff;background:color-mix(in srgb,var(--c) 24%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 60%,transparent),0 0 18px color-mix(in srgb,var(--c) 30%,transparent)}
+.hz .corner{position:absolute;right:16px;top:14px;display:flex;gap:3px;padding:4px;border-radius:14px}
+.hz .cb{font-size:11px;letter-spacing:1.5px;padding:7px 11px;border-radius:10px;color:#EEF2FF;cursor:pointer}.hz .cb:hover{background:rgba(255,255,255,.1)}
+.hz .cb.panic{color:#FFC8BC}.hz .cb.panic:hover{background:rgba(160,40,30,.5)}
+.hz .mod.down,.hz .cb.down,.hz .pill span.down{transform:translateY(1px);filter:brightness(.8)}
+.hz .credit{position:absolute;left:16px;top:14px;padding:6px 12px;border-radius:12px;font-size:10px;letter-spacing:1px;color:#DDE3F5;opacity:.7}
+/* the pane of glass a drawer's strips (or STAGE) rise on */
+.hz .pane{position:absolute;left:50%;bottom:88px;transform:translate(-50%,0);padding:12px;display:flex;flex-direction:column;align-items:center;transition:opacity .25s,transform .25s}
+.hz .pane.none{opacity:0;transform:translate(-50%,20px);pointer-events:none}
+.hz .fams{display:grid;grid-template-columns:repeat(12,104px);column-gap:6px;height:24px;width:100%;justify-content:center}
+.hz .fam{font-size:10.5px;letter-spacing:3px;font-weight:600;color:color-mix(in srgb,var(--c) 75%,#fff);border-bottom:2px solid var(--c);padding:0 0 4px 4px;margin:0 2px 6px;align-self:end}
+.hz .rowc{display:flex;gap:6px;justify-content:center}
+/* a strip, and a MORE panel, on the same rows: name 22, switch 24, modes 50, three knob rows of 64, the fader 104 */
+.hz .strip,.hz .more{box-sizing:border-box;height:408px;border-radius:12px;background:rgba(0,0,0,.28);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);padding:8px 3px;display:grid;
+  grid-template-rows:22px 24px 50px 64px 64px 64px 104px;justify-items:center;align-items:start;flex:0 0 auto}
+.hz .strip{width:104px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),inset 0 2px 0 color-mix(in srgb,var(--c) 75%,transparent)}
+.hz .strip h3,.hz .more h3{margin:0;font-weight:600;font-size:12px;letter-spacing:2.6px;color:color-mix(in srgb,var(--c) 75%,#fff);align-self:center;white-space:nowrap}
+.hz .strip .modes{display:grid;gap:3px;width:100%;padding:3px 3px 0;box-sizing:border-box;align-self:start}
+.hz .chip{font-size:9.5px;letter-spacing:.6px;font-weight:600;padding:5px 0;border-radius:6px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.14);color:#EEF2FF;text-align:center;cursor:pointer;white-space:nowrap;overflow:hidden}
+.hz .chip:hover{border-color:rgba(255,255,255,.38)}.hz .chip.lit{border-color:var(--c);color:#FFFFFF;background:color-mix(in srgb,var(--c) 32%,rgba(0,0,0,.3))}
+.hz .chip.down{transform:translateY(1px);filter:brightness(.8)}
+.hz .strip .chip{letter-spacing:0;font-size:8.5px}
+.hz .nmrow{display:grid;grid-template-columns:18px 1fr 18px;gap:3px;width:100%;padding:3px 3px 0;box-sizing:border-box}
+.hz .nmrow .chip.nm{font-size:8.5px;letter-spacing:.3px;white-space:normal;line-height:1.15;padding:3px 1px;display:flex;align-items:center;justify-content:center;min-height:30px;cursor:default}
+.hz .nmrow .chip:not(.nm){display:flex;align-items:center;justify-content:center}
+.hz .tg{display:grid;grid-template-columns:1fr 1fr;gap:5px;width:100%;padding:8px 3px 0;box-sizing:border-box;align-self:start}
+.hz .tg .chip{padding:9px 0;font-size:9.5px}
+.hz .sw{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:2px;color:#EEF2FF;padding:3px 9px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(0,0,0,.3);cursor:pointer;height:20px;box-sizing:border-box}
+.hz .sw i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.25);pointer-events:none}.hz .sw.on{border-color:var(--c);color:#fff}.hz .sw.on i{background:var(--c);box-shadow:0 0 8px var(--c)}
+/* knobs: a ring showing the value in the family's colour */
+.hz .kn{width:76px;display:flex;flex-direction:column;align-items:center;gap:1px;cursor:ns-resize;touch-action:none}
+.hz .kn .cap{--v:.5;width:35px;height:35px;border-radius:50%;position:relative;background:conic-gradient(from 225deg,var(--c,#FF7A3C) calc(var(--v)*270deg),rgba(255,255,255,.16) 0 270deg,transparent 0)}
+.hz .kn .cap::before{content:"";position:absolute;inset:4px;border-radius:50%;background:radial-gradient(circle at 45% 35%,#4A4E66,#141620 70%);box-shadow:0 2px 4px rgba(0,0,0,.6)}
+.hz .kn .cap i{position:absolute;left:50%;top:6px;width:3px;height:10px;margin-left:-1.5px;border-radius:2px;background:#FFF2E8;transform-origin:50% 11.5px;z-index:1;pointer-events:none}
+.hz .kn b,.hz .kn em,.hz .fd b,.hz .fd em{pointer-events:none}.hz .kn b,.hz .fd b{font-weight:600;font-size:9.5px;letter-spacing:1px;color:#EEF2FF;white-space:nowrap;line-height:11px;height:11px}
+.hz .kn em,.hz .fd em{font-style:normal;font-size:9.5px;color:color-mix(in srgb,var(--c,#FF9A60) 70%,#fff);font-family:Menlo,Consolas,monospace;line-height:11px;height:11px;white-space:nowrap}
+.hz .kn:hover .cap::before{filter:brightness(1.25)}.hz .kn.off,.hz .fd.off{opacity:.42}
+/* MASTER in the bar: the knob, its name and value beside it */
+.hz .bar .kn.tk{--c:#FF7A3C;width:auto;display:grid;grid-template-columns:35px auto;column-gap:7px;row-gap:1px;align-items:center;justify-items:start}
+.hz .bar .kn.tk .cap{grid-row:1 / 3}
+/* faders: the strip's main level */
+.hz .fd{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:ns-resize;touch-action:none}
+.hz .fd .track{--v:.5;position:relative;width:34px;height:76px;border-radius:7px;background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.1);box-sizing:border-box}
+.hz .fd .track::before{content:"";position:absolute;left:50%;top:7px;bottom:7px;width:4px;margin-left:-2px;border-radius:2px;background:linear-gradient(to top,var(--c) calc(var(--v)*100%),rgba(255,255,255,.12) 0)}
+.hz .fd .track i{position:absolute;left:3px;right:3px;height:14px;border-radius:4px;background:linear-gradient(#F4F4FA,#A9A9B8);bottom:calc(var(--v)*46px + 7px);box-shadow:0 2px 5px rgba(0,0,0,.6);pointer-events:none}
+.hz .fd .track i::after{content:"";position:absolute;left:3px;right:3px;top:6px;height:2px;background:var(--c)}
+/* the MORE panel: the same rows, with labelled lines of buttons and rows of knobs */
+.hz .more{justify-items:stretch;padding:8px 12px;--c:#B8C0E0;min-width:300px}
+.hz .more .ln{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow:hidden}
+.hz .more .ln>i,.hz .more .kr>i{font-style:normal;font-size:9.5px;font-weight:600;letter-spacing:1.5px;color:#DDE2F4;width:76px;flex:0 0 auto}
+.hz .more .ln .chip{padding:4px 7px;font-size:9.5px}
+.hz .more .two{display:flex;flex-direction:column;gap:4px;justify-content:center}
+.hz .more .kr{display:flex;align-items:start;gap:0}.hz .more .kr>i{padding-top:13px}
+.hz .soon{font-size:9px;letter-spacing:1.2px;color:#FFD2BC;opacity:.9;text-align:center;line-height:1.3;align-self:center}

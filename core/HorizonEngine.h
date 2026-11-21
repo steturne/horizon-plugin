@@ -149,6 +149,7 @@ private:
     std::vector<float> piece;
     double now = 0;                                     // seconds since prepare
     void plateMaintain();
+    std::atomic<const SampleSet*> samples { nullptr };
     Settings S;
     double rate = 44100.0, tempo = 120.0;
     uint32_t clock = 0;

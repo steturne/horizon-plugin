@@ -28,14 +28,16 @@ The newest build is always here (no GitHub account needed):
 1. Download `HORIZON-Mac-AU.zip` and double-click it: you get **HORIZON.component**.
 2. In Finder, press **Shift+Cmd+G**, type `~/Library/Audio/Plug-Ins/Components` and press Return.
    Drag **HORIZON.component** into that folder.
-3. The plugin isn't signed by Apple (that costs $99 a year), so the Mac will block it until you tell it you trust it. Open
-   **Terminal** (Applications > Utilities) and paste this line, then press Return:
+3. Open Ableton Live (if it was already open, **quit it and open it again**: Live only looks for new plugins as it starts). In
+   **Preferences > Plug-Ins** (Live 9: **File/Folder**) turn on **Use Audio Units**. Live checks its plugins (a minute, the first time).
+4. The plugin isn't signed by Apple (that costs $99 a year), so the Mac blocks it the first time ("cannot be opened because Apple
+   cannot check it…"). Open **System Preferences > Security & Privacy > General**: near the bottom it names HORIZON, with
+   **Allow Anyway** (or **Open Anyway**). Click it, then **quit Live and open it again**.
 
+   (Or, before step 3: open **Terminal** (Applications > Utilities), paste this line and press Return; then the Mac doesn't ask.)
    ```
    xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/HORIZON.component
    ```
-4. Open Ableton Live. In **Preferences > Plug-Ins** (Live 9: **File/Folder**) turn on **Use Audio Units**. Live checks its plugins
-   (a minute, the first time).
 5. In Live's browser: **Plug-Ins > Audio Units > Steve Turner > HORIZON**. Drag it onto a MIDI track, arm the track and play.
    The window opens with the wrench/spanner icon on the device.
 

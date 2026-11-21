@@ -102,7 +102,7 @@ const DEFK = { level: .75, damp: .6, release: .25, 'tube.drive': .3, 'tube.warmt
 for (const [k, v] of Object.entries(SHAPE0)) DEFK['shape.' + k] = v;
 for (const k of ['swell', 'tone', 'width', 'amt', 'speed', 'space', 'tex', 'sub', 'air', 'spark']) DEFK['pad.P.' + k] = HALO_DEF[k];
 /* what does not sound yet in the plugin (coming in its next steps): its controls work and are kept, the screen says so */
-const SOON = k => /^(rev\.|s:rev|pad\.|s:pad|pp\.|pc\.|pm\.|pv\.|pr\.|po\.|dk\.|dr\.|plate\.|s:plate|verb\.bloom)/.test(k);
+const SOON = k => /^(pad\.|s:pad|pp\.|pc\.|pm\.|pv\.|pr\.|po\.|dk\.|dr\.)/.test(k);
 
 /* ---- the plugin's parameters (Params.h), each a JUCE state; in a plain browser, a stand-in keeping its own value ---- */
 const TOGGLES = { rev_on: 0, rev_sync: 0, rev_rings: 1, tube_on: 0, tape_on: 0, del_on: 0, del_sync: 1, verb_on: 1, verb_freeze: 0, plate_on: 0, chan_mono: 0, pad_on: 0,

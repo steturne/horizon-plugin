@@ -49,11 +49,22 @@ HorizonEditor::HorizonEditor (HorizonProcessor& p)
     }
     addAndMakeVisible (web);
     web.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
-    /* 16:9, as HORIZON's face; any size from small to full HD */
+    /* 16:9, as HORIZON's face. The size the window was last dragged to (kept with the song); the first time, big: 85% of the
+       screen's width (Steve found the first size a bit small on his MacBook), as long as it fits the screen's height */
     setResizable (true, true);
-    setResizeLimits (800, 450, 1920, 1080);
+    setResizeLimits (800, 450, 2560, 1440);
     if (auto* c = getConstrainer()) c->setFixedAspectRatio (16.0 / 9.0);
-    setSize (1120, 630);
+    int w = (int) p.state.state.getProperty ("editorW", 0), h = (int) p.state.state.getProperty ("editorH", 0);
+    if (w < 800 || h < 450)
+    {
+        juce::Rectangle<int> area (0, 0, 1440, 900);
+        if (auto* d = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()) area = d->userArea;
+        w = juce::jmin (2560, (int) (area.getWidth() * .85)); h = w * 9 / 16;
+        const int maxH = (int) (area.getHeight() * .85);
+        if (h > maxH) { h = maxH; w = h * 16 / 9; }
+        w = juce::jmax (800, w); h = juce::jmax (450, h);
+    }
+    setSize (w, h);
     startTimerHz (30);
 }
 
@@ -61,7 +72,13 @@ HorizonEditor::~HorizonEditor() { stopTimer(); }
 
 void HorizonEditor::paint (juce::Graphics& g) { g.fillAll (juce::Colour (0xff05080f)); }
 
-void HorizonEditor::resized() { web.setBounds (getLocalBounds()); }
+void HorizonEditor::resized()
+{
+    web.setBounds (getLocalBounds());
+    /* remembered with the song, so the window opens at the size it was left */
+    proc.state.state.setProperty ("editorW", getWidth(), nullptr);
+    proc.state.state.setProperty ("editorH", getHeight(), nullptr);
+}
 
 /* 30 times a second: how loud it plays (the sky's aurora follows it), a key struck (its velocity: a pulse, now and then a surge),
    the pedal, and the piano's loading state (every time: a window opened, or a page still starting, after the piano was ready

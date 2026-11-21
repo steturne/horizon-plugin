@@ -124,7 +124,66 @@ void Hall::prepare (double r)
     set (.74f, decOf (.6f), .024f, 40 * std::pow (15.0f, .35f), 0, false);
     for (int i = 0; i < N; ++i) lineT[i].reset (lineT[i].target);
     gain.reset (gain.target); sumG.reset (sumG.target); preT.reset (preT.target);
+    /* BLOOM's convolvers: two slots (the new swell is made in the other while the old one plays), up to 12 s of ring */
+    const int B = rate > 50000 ? 4096 : 2048;
+    for (auto& s : sw) { for (auto& c : s.c) c.setup (B, (int) (12 * rate) + B); s.ready = false; }
+    piece.assign ((size_t) B, 0.0f);
+    swNow = swMaking = -1; swAmt = swLen = 0; swWantAmt = swWantLen = -1; swLive = false;
+    swWet.setup (rate, .04); fdnG.setup (rate, .04); swWet.reset (0); fdnG.reset (1);
     clear();
+}
+
+/* BLOOM: Crazy Dream Lite's swell(): a convolver with a rising tail (noise on a rising curve, renderSwell), made only once BLOOM
+   is turned up; its length follows the hall's decay. The new tail is made a piece each block in the other slot, then swapped in */
+void Hall::bloom (float amt, float decay, double now)
+{
+    bloomAmt = amt;
+    if (amt <= 0)
+    {
+        swWet.target = 0; fdnG.target = 1;
+        if (swLive && now - swQuietSince > swLen + .5) { swLive = false; if (swNow >= 0) for (auto& c : sw[swNow].c) c.clear(); }
+        return;
+    }
+    swQuietSince = now;
+    const float len = std::min (12.0f, std::max (.4f, decay * (.25f + .5f * amt)));
+    const float a = std::round (amt * 100) / 100, l = std::round (len * 100) / 100;
+    if ((a != swAmt || l != swLen) && swMaking < 0)
+    {
+        if (a != swWantAmt || l != swWantLen) { swWantAmt = a; swWantLen = l; swWantSince = now; }
+        if (swNow < 0 || now - swWantSince >= .14)
+        {
+            swMaking = swNow == 0 ? 1 : 0; swAmt = a; swLen = l;
+            Swell& s = sw[swMaking]; s.ready = false; for (auto& c : s.c) { c.beginRing(); c.clear(); }
+            sg.len = (int) std::lround (l * rate); sg.made = 0; sg.fo = (int) std::lround (rate * .03); sg.e = 0; sg.y[0] = sg.y[1] = 0;
+            sg.k = (float) std::exp (-2 * kPi * std::min (7500.0, 16000.0) / rate); sg.pw = 1 + 2.5f * a;
+        }
+    }
+    if (swMaking >= 0)
+    {
+        Swell& s = sw[swMaking];
+        const int B = s.c[0].pieceSize();
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            for (int i = 0; i < B; ++i)
+            {
+                const int j = sg.made + i;
+                if (j >= sg.len) { piece[(size_t) i] = 0; continue; }
+                sg.y[ch] = (1 - sg.k) * (sg.rng.next() * 2 - 1) + sg.k * sg.y[ch];
+                float e = std::pow ((float) j / (float) sg.len, sg.pw);
+                if (j > sg.len - sg.fo) e *= (float) (sg.len - j) / (float) sg.fo;
+                piece[(size_t) i] = sg.y[ch] * e; sg.e += (double) piece[(size_t) i] * piece[(size_t) i];
+            }
+            s.c[ch].addPiece (piece.data());
+        }
+        sg.made += B;
+        if (sg.made >= sg.len || s.c[0].full())
+        {
+            s.scale = (float) (2.2 / std::sqrt (sg.e / 2 + 1e-12)); s.ready = true;
+            swNow = swMaking; swMaking = -1;
+        }
+    }
+    swLive = swNow >= 0;
+    swWet.target = swNow >= 0 ? amt * .9f : 0.0f; fdnG.target = 1 - amt;
 }
 
 void Hall::clear()
@@ -161,6 +220,10 @@ void Hall::process (float inL, float inR, float& outL, float& outR)
     pre.push (x);
     x = pd >= 1 ? pre.read (pd) : x;
     x = highCut.tick (lowCut.tick (x));
+    /* BLOOM's swell hears the sound here (after the low and high cut, before the diffusion) */
+    float bl = 0, br = 0;
+    const float swg = swWet.next(), fg = fdnG.next();
+    if (swLive && swNow >= 0) { Swell& s = sw[swNow]; bl = s.c[0].tick (x) * s.scale * swg; br = s.c[1].tick (x) * s.scale * swg; }
     for (auto& d : diff) x = d.tick (x);
     /* the two drifts, each used both ways (as depths[] in crazy-dream-lite.js) */
     const float hz = lfoHz;
@@ -188,14 +251,25 @@ void Hall::process (float inL, float inR, float& outL, float& outR)
         outL = tap * .5f * (L + cl); outR = tap * .5f * (R + cr);
     }
     else { outL = tap * L; outR = tap * R; }
+    outL = outL * fg + bl; outR = outR * fg + br;
 }
 
 /* =============================== the engine =============================== */
 void Engine::prepare (double sampleRate)
 {
     rate = sampleRate > 0 ? sampleRate : 44100.0;
+    now = 0;
     for (auto& v : voices) v.active = false;
-    for (auto* b : { busS, busT, busG }) for (int c = 0; c < 2; ++c) b[c].assign (64, 0.0f);
+    for (auto& r : revs) r.active = false;
+    for (auto* b : { busS, busT, busG, busR }) for (int c = 0; c < 2; ++c) b[c].assign (64, 0.0f);
+    /* the PLATE's convolvers: two slots, up to 5 s of ring each; made now (allocating), filled only when the PLATE is switched on */
+    const int B = rate > 50000 ? 2048 : 1024;
+    for (auto& s : plates) { for (auto& c : s.c) c.setup (B, (int) (5 * rate) + B); s.live = false; s.T = -1; s.in.setup (rate, .03); s.in.reset (0); }
+    piece.assign ((size_t) B, 0.0f);
+    plNow = plMaking = -1; plWantT = -1;
+    plPreL.setup ((int) (rate * .13)); plPreR.setup ((int) (rate * .13));
+    for (auto* s : { &gPlIn, &gPlOut, &gPlPre, &dkL }) s->setup (rate, .05);
+    gPlIn.setup (rate, .02); gPlPre.setup (rate, .03);
     for (auto* s : { &gPiano, &gSpark, &gStrike, &gGate, &gDelIn, &gVerbIn, &gD, &gV, &gShim, &gTapeWet, &gWow, &gFlutter, &gHiss, &gChDry, &gChMake,
                      &gWA, &gWB, &gOut, &dkV, &dkD, &HS.through, &HS.pre, &HS.post, &HS.del, &HS.rev, &HT.through, &HT.pre, &HT.post, &HT.del, &HT.rev })
         s->setup (rate, .05);
@@ -215,8 +289,81 @@ void Engine::prepare (double sampleRate)
     for (auto* s : { &gPiano, &gSpark, &gStrike, &gGate, &gDelIn, &gVerbIn, &gD, &gV, &gShim, &gTapeWet, &gWow, &gFlutter, &gHiss, &gChDry, &gChMake,
                      &gWA, &gWB, &gOut, &dkV, &dkD, &dDelayT, &HS.through, &HS.pre, &HS.post, &HS.del, &HS.rev, &HT.through, &HT.pre, &HT.post, &HT.del, &HT.rev })
         s->reset (s->target);
+    for (auto* s : { &gPlIn, &gPlOut, &gPlPre, &dkL }) s->reset (s->target);
     pedalOn = false;
     for (int i = 0; i < 128; ++i) down[i] = sus[i] = false;
+}
+
+/* the PLATE's ring (plateIR in horizon.js): dense from the first millisecond (a steel sheet, no early echoes), dying away over
+   DECAY, its highs a little sooner and its lows a little later; left and right each their own, so it is wide; made at the level the
+   dry sound has. Made a piece each block in the other slot when DECAY settles on a new value (a knob turning: one new ring when it
+   rests), then the sound moves across to it and the old ring dies away untouched */
+void Engine::plateMaintain()
+{
+    const auto& pl = S.plate;
+    const float T = std::round (plDec (pl.decay) * 100) / 100;
+    if (pl.on)
+    {
+        const float cur = plMaking >= 0 ? pg.T : plNow >= 0 ? plates[plNow].T : -1;
+        if (T != cur && plMaking < 0)
+        {
+            if (T != plWantT) { plWantT = T; plWantSince = now; }
+            if (plNow < 0 || now - plWantSince >= .14)
+            {
+                plMaking = plNow == 0 ? 1 : 0;
+                PlateSlot& s = plates[plMaking];
+                s.live = false; s.T = T; for (auto& c : s.c) { c.beginRing(); c.clear(); }
+                const double sr = rate;
+                pg = PlateGen{}; pg.T = T; pg.len = (int) std::lround (sr * std::min (5.0, T * 1.2 + .05));
+                pg.aL = (float) std::exp (-2 * kPi * 700 / sr); pg.aH = (float) std::exp (-2 * kPi * 4500 / sr);
+                pg.kL = (float) std::exp (-6.91 / (T * 1.15 * sr)); pg.kM = (float) std::exp (-6.91 / (T * sr)); pg.kH = (float) std::exp (-6.91 / (T * .6 * sr));
+                pg.kA = (float) std::exp (-1 / (.003 * sr));
+                for (int c = 0; c < 2; ++c) { pg.gL[c] = pg.gM[c] = pg.gH[c] = pg.ga[c] = 1; }
+            }
+        }
+        if (plNow >= 0) plates[plNow].live = true;
+    }
+    if (plMaking >= 0)
+    {
+        PlateSlot& s = plates[plMaking];
+        const int B = s.c[0].pieceSize();
+        for (int c = 0; c < 2; ++c)
+        {
+            for (int i = 0; i < B; ++i)
+            {
+                if (pg.made + i >= pg.len) { piece[(size_t) i] = 0; continue; }
+                const float n = rng.next() * 2 - 1;
+                pg.lo[c] = pg.lo[c] * pg.aL + n * (1 - pg.aL);
+                const float r = n - pg.lo[c];
+                pg.lh[c] = pg.lh[c] * pg.aH + r * (1 - pg.aH);
+                const float d = (pg.lo[c] * pg.gL[c] + pg.lh[c] * pg.gM[c] + (r - pg.lh[c]) * pg.gH[c]) * (1 - pg.ga[c]);
+                pg.gL[c] *= pg.kL; pg.gM[c] *= pg.kM; pg.gH[c] *= pg.kH; pg.ga[c] *= pg.kA;
+                piece[(size_t) i] = d; pg.e += (double) d * d;
+            }
+            s.c[c].addPiece (piece.data());
+        }
+        pg.made += B;
+        if (pg.made >= pg.len || s.c[0].full())
+        {
+            s.scale = (float) (.8 / std::sqrt (pg.e / 2 + 1e-12));
+            s.live = true; s.in.reset (0); s.in.target = 1;
+            if (plNow >= 0) { PlateSlot& o = plates[plNow]; o.in.target = 0; o.ringUntil = now + o.T * 1.2 + .3; }
+            plNow = plMaking; plMaking = -1;
+        }
+    }
+    /* an old ring that has died away, or the PLATE switched off and its ring gone: nothing runs */
+    for (int k = 0; k < 2; ++k)
+    {
+        PlateSlot& s = plates[k];
+        if (! s.live) continue;
+        if (k != plNow && now > s.ringUntil) { s.live = false; for (auto& c : s.c) c.clear(); }
+    }
+    if (! pl.on && plNow >= 0)
+    {
+        PlateSlot& s = plates[plNow];
+        if (gPlIn.value > 1e-4f) s.ringUntil = now + s.T * 1.2 + .3;
+        else if (s.live && now > s.ringUntil) { s.live = false; for (auto& c : s.c) c.clear(); }
+    }
 }
 
 /* every setting into the sound (E.apply), once a block; the gains glide there sample by sample */
@@ -274,6 +421,13 @@ void Engine::update (int)
     const float wd = ch.mono ? 0 : ch.width * 1.5f;
     gWA.target = (1 + wd) / 2; gWB.target = (1 - wd) / 2;
     gOut.target = dbToGain (-30 + 36 * ch.out);
+    /* REVERSE's notes: their own DAMP */
+    rDamp.set (Biquad::lowpass, rate, cut, .5f);
+    /* the PLATE, on the CHANNEL: its send cut below LOW CUT and above HIGH CUT, PRE-DELAY (less the convolver's own lateness), MIX, DUCK */
+    const auto& pl = P.plate;
+    plHp.set (Biquad::highpass, rate, plLow (pl.low), .6f); plLp.set (Biquad::lowpass, rate, plHigh (pl.high), .6f);
+    gPlIn.target = pl.on ? 1.0f : 0.0f; gPlOut.target = pl.mix * 4; dkL.target = pl.duck;
+    gPlPre.target = (float) std::max (0.0, pl.pre * .12 * rate - plates[0].c[0].pieceSize());
 }
 
 /* ---- the voices ---- */
@@ -308,9 +462,25 @@ void Engine::noteOn (int n, int vel)
     down[n] = true; sus[n] = false;
     for (auto& v : voices) if (v.active && v.note == n && ! v.released) release (v, .08f);   // the string struck again
     if (S.piano == 2 || ! ready()) return;
-    Voice& v = freeVoice();
-    start (v, n, std::min (127, vel));
+    const bool backOnly = S.rev.on && S.rev.kind == 0;                        // REVERSE BACK: the backwards note is the note
+    if (! backOnly) { Voice& v = freeVoice(); start (v, n, std::min (127, vel)); }
+    if (S.rev.on) reverseNote (n, std::min (127, vel));
     hitVel.store (vel, std::memory_order_relaxed); hitCount.fetch_add (1, std::memory_order_relaxed);
+}
+
+/* every voice of a key let go (the strike always; the backwards ones only when RINGS ON is off: E.noteOff) */
+void Engine::letGo (int n)
+{
+    const float rel = relOf (S.release);
+    for (auto& v : voices) if (v.active && v.note == n && ! v.released) release (v, rel);
+    if (! S.rev.rings)
+        for (auto& r : revs)
+            if (r.active && r.note == n && ! r.released)
+            {
+                if (r.wait > 0) { r.active = false; continue; }                  // not begun: never begins
+                const float k = std::max (rel, .25f);
+                r.released = true; r.relCoef = (float) std::exp (-1.0 / (std::max (.005f, k / 4) * rate)); r.stopAt = (float) r.u + k * 1.6f + .05f;
+            }
 }
 
 void Engine::noteOff (int n)
@@ -318,21 +488,69 @@ void Engine::noteOff (int n)
     if (n < 0 || n > 127) return;
     down[n] = false;
     if (pedalOn) { sus[n] = true; return; }
-    const float rel = relOf (S.release);
-    for (auto& v : voices) if (v.active && v.note == n && ! v.released) release (v, rel);
+    letGo (n);
 }
 
 void Engine::pedal (bool on)
 {
     pedalOn = on; pedalIsDown.store (on, std::memory_order_relaxed);
     if (on) return;
-    const float rel = relOf (S.release);
     for (int n = 0; n < 128; ++n)
-        if (sus[n]) { sus[n] = false; if (! down[n]) for (auto& v : voices) if (v.active && v.note == n && ! v.released) release (v, rel); }
+        if (sus[n]) { sus[n] = false; if (! down[n]) letGo (n); }
+}
+
+/* REVERSE (E.noteOn): the key's recording backwards (its first seconds, ending on the hammer), swelling in over SWELL; BACK: that
+   is the note (after TIME when in beats); P+B: the piano, then the backwards note TIME later; ECHO: backwards echoes TIME apart,
+   left, right, left…, each REPEATS quieter */
+void Engine::reverseNote (int n, int vel)
+{
+    const SampleSet& set = *samples.load (std::memory_order_acquire);
+    const auto& rv = S.rev;
+    int li = 0; while (li < 3 && vel >= kLayerTop[li]) ++li;
+    const int lo = li ? kLayerTop[li - 1] : 1;
+    const float frac = clampf ((float) (vel - lo) / (float) (kLayerTop[li] - lo), 0, 1), amp = (.62f + .38f * frac) * 1.15f;
+    int lf = 0; const int rn = set.nearest (n, li, lf);
+    if (rn < 0) return;
+    const auto& rec = set.recs[rn][lf];
+    const double pr = std::pow (2.0, (n - rn) / 12.0), dur = std::min (rec.seconds() / pr, 4.2);
+    const float T = rv.sync ? (float) (60.0 / tempo) * kRevBeats[std::max (0, std::min (6, (int) std::lround (rv.time * 6)))] : freeT (rv.time);
+    const float sw = (float) std::min ((double) swellOf (rv.swell), dur - .02), lv = amp * rv.mix * 1.3f;
+    if (sw <= .01f) return;
+    auto one = [&] (float when, float a, float pan) {
+        RevVoice* v = nullptr;
+        for (auto& r : revs) if (! r.active) { v = &r; break; }
+        if (v == nullptr) for (auto& r : revs) if (v == nullptr || r.age < v->age) v = &r;   // the oldest gives way
+        *v = RevVoice{};
+        v->active = true; v->note = n; v->age = ++clock; v->rec = &rec; v->pr = pr; v->wait = when; v->sw = sw; v->amp = a; v->att = sw * .45f;
+        panGains (pan, v->panL, v->panR);
+    };
+    const float pan = clampf ((n - 64) / 44.0f, -1, 1) * .45f;
+    if (rv.kind == 0) one (rv.sync ? T : std::min (T, .05f), amp * (.4f + rv.mix * .9f), pan);
+    else if (rv.kind == 1) one (T, lv, pan);
+    else { float a = lv; for (int k = 1; k <= 8 && a > .015f; ++k) { one (T * k, a, k % 2 ? -.55f : .55f); a *= rv.rep * .95f; } }
+}
+
+void Engine::renderRev (RevVoice& v, int n)
+{
+    const double dt = 1.0 / rate;
+    int i = 0;
+    if (v.wait > 0) { const int w = (int) std::ceil (v.wait * rate); if (w >= n) { v.wait -= n * dt; return; } i = w; v.wait = 0; }
+    const auto& x = v.rec->data; const double k = v.pr * v.rec->rate;
+    for (; i < n; ++i)
+    {
+        const double kt = v.sw - v.u;                                            // the key's time, running backwards to the hammer
+        if (kt <= 0 || v.u >= v.stopAt) { v.active = false; return; }
+        const float g = (v.u < v.att ? v.amp * (float) v.u / v.att : v.amp) * v.relG;
+        const float y = readAt (x, kt * k) * g;
+        busR[0][(size_t) i] += y * v.panL; busR[1][(size_t) i] += y * v.panR;
+        v.u += dt;
+        if (v.released) { v.relG *= v.relCoef; if (v.relG < 1e-4f) { v.active = false; return; } }
+    }
 }
 
 void Engine::allNotesOff()
 {
+    for (auto& r : revs) r.active = false;
     for (auto& v : voices) if (v.active) kill (v, .02f);
     pedalOn = false; pedalIsDown.store (false);
     for (int i = 0; i < 128; ++i) down[i] = sus[i] = false;
@@ -529,8 +747,12 @@ void Engine::render (float* outL, float* outR, int total)
     {
         const int n = std::min (32, total - done);
         update (n);
-        for (auto* b : { busS, busT, busG }) for (int c = 0; c < 2; ++c) std::fill (b[c].begin(), b[c].begin() + n, 0.0f);
-        if (ready()) for (auto& v : voices) if (v.active) renderVoice (v, n);
+        plateMaintain();
+        hall.bloom (S.verb.bloom * .9f, decOf (S.verb.size), now);
+        now += n / rate;
+        for (auto* b : { busS, busT, busG, busR }) for (int c = 0; c < 2; ++c) std::fill (b[c].begin(), b[c].begin() + n, 0.0f);
+        if (ready()) { for (auto& v : voices) if (v.active) renderVoice (v, n); for (auto& r : revs) if (r.active) renderRev (r, n); }
+        const bool plateLive = plates[0].live || plates[1].live;
 
         for (int i = 0; i < n; ++i)
         {
@@ -559,10 +781,14 @@ void Engine::render (float* outL, float* outR, int total)
                 }
             }
             const float sD = HS.del.next(), tD = HT.del.next(), sR = HS.rev.next(), tR = HT.rev.next(), gate = gGate.next();
-            float L = gate * (o[0][0] + o[1][0]), R = gate * (o[0][1] + o[1][1]);
+            /* REVERSE's backwards notes, through their DAMP: heard, and into the DELAY, the REVERB and the PLATE */
+            const float rl = rDamp.tick (busR[0][(size_t) i], 0), rr = rDamp.tick (busR[1][(size_t) i], 1);
+            float L = gate * (o[0][0] + o[1][0]) + rl, R = gate * (o[0][1] + o[1][1]) + rr;
             const float dIn = gDelIn.next();
-            float delL = dIn * (o[0][0] * sD + o[1][0] * tD), delR = dIn * (o[0][1] * sD + o[1][1] * tD);
-            float vL = o[0][0] * sR + o[1][0] * tR, vR = o[0][1] * sR + o[1][1] * tR;
+            float delL = dIn * (o[0][0] * sD + o[1][0] * tD + rl), delR = dIn * (o[0][1] * sD + o[1][1] * tD + rr);
+            float vL = o[0][0] * sR + o[1][0] * tR + rl, vR = o[0][1] * sR + o[1][1] * tR + rr;
+            /* the PLATE's send: the piano's two halves (heard or not), the backwards notes, the echoes (added below) */
+            float pL = o[0][0] + o[1][0] + rl, pR = o[0][1] + o[1][1] + rr;
             /* DUCK: how loud the piano plays (both halves, heard or not), a slow envelope; a firm note ducks fully, a fading ring a little */
             {
                 const float eL = duckEnv.tick (std::abs (o[0][0] + o[1][0]), 0), eR = duckEnv.tick (std::abs (o[0][1] + o[1][1]), 1);
@@ -577,6 +803,7 @@ void Engine::render (float* outL, float* outR, int total)
                 const float gd = gD.next(), duck = 1 + dkD.next() * duckNow;
                 L += yl * gd * duck; R += yr * gd * duck;
                 vL += yl * gd; vR += yr * gd;
+                pL += yl * gd; pR += yr * gd;
             }
             /* REVERB: the hall, its SHIMMER fed back into it, its DUCK */
             {
@@ -611,6 +838,20 @@ void Engine::render (float* outL, float* outR, int total)
                     const float sl = std::tanh (tk * clampf (tapeL.read (d), -1, 1)) / nrm * post, sr = std::tanh (tk * clampf (tapeR.read (d), -1, 1)) / nrm * post;
                     const float hs = hiss > 0 ? hissHp.tick (rng.next() * 2 - 1) * hiss : 0.0f;
                     L = L * (1 - wet) + sl * wet + hs; R = R * (1 - wet) + sr * wet + hs;
+                }
+            }
+            /* the PLATE (after TAPE, into the CHANNEL, as horizon.js wires it): cut below LOW CUT and above HIGH CUT, PRE-DELAY, its ring(s), MIX, DUCK */
+            {
+                const float gi = gPlIn.next(), gp = gPlPre.next(), go = gPlOut.next() * (1 + dkL.next() * duckNow);
+                if (plateLive)
+                {
+                    float xl = plLp.tick (plHp.tick (pL * gi, 0), 0), xr = plLp.tick (plHp.tick (pR * gi, 1), 1);
+                    plPreL.push (xl); plPreR.push (xr);
+                    if (gp >= 1) { xl = plPreL.read (gp); xr = plPreR.read (gp); }
+                    float yl = 0, yr = 0;
+                    for (auto& s : plates)
+                        if (s.live) { const float g = s.in.next(); yl += s.c[0].tick (xl * g) * s.scale; yr += s.c[1].tick (xr * g) * s.scale; }
+                    L += yl * go; R += yr * go;
                 }
             }
             /* the CHANNEL: LOW CUT, BODY, PRESENCE, AIR, a gentle compressor blended in alongside, WIDTH, MASTER; then the limiter */

@@ -21,6 +21,7 @@
 #include <atomic>
 #include <cstdint>
 #include <vector>
+#include "Convolver.h"
 #include "Dsp.h"
 #include "HorizonSettings.h"
 
@@ -62,10 +63,20 @@ public:
     void clear();
     /* size 0..1 (Crazy Dream's), decay seconds, predelay seconds, low cut Hz, resonance 0..1, frozen */
     void set (float size, float decay, float predelay, float lowCut, float resonance, bool frozen);
+    /* BLOOM (Crazy Dream's negative gravity): a swell that rises out of the hall, played by a convolver whose rising ring is made
+       here a piece at a time; amount 0 … 1 (HORIZON's BLOOM × 0.9); call once a block with the time in seconds */
+    void bloom (float amount, float decay, double now);
     void process (float inL, float inR, float& outL, float& outR);
 private:
     static constexpr int N = 8;
     double rate = 44100;
+    struct Swell { PartConv c[2]; float scale = 0; bool ready = false; };
+    Swell sw[2]; int swNow = -1, swMaking = -1;
+    float swAmt = 0, swLen = 0, swWantAmt = -1, swWantLen = -1; double swWantSince = 0, swQuietSince = 0; bool swLive = false;
+    /* the ring being made: noise on a rising curve, low-passed (renderSwell) */
+    struct SwellGen { int len = 0, made = 0, fo = 0; float k = 0, pw = 1, y[2] = { 0, 0 }; double e = 0; Rng rng; } sg;
+    std::vector<float> piece;
+    Smooth swWet, fdnG; float bloomAmt = 0;
     Delay pre, line[N];
     Biquad lowCut, highCut, diff[5], damp[N], peak[N];
     Smooth lineT[N], gain, sumG, preT, inGate;
@@ -118,7 +129,26 @@ private:
         Grain grains[kMaxGrains]; int nGrains = 0;
     };
     Voice voices[kMaxVoices];
-    std::atomic<const SampleSet*> samples { nullptr };
+    /* REVERSE: a key's own recording played backwards into its strike (the swell), now or a TIME later, or as echoes */
+    static constexpr int kMaxRev = 64;
+    struct RevVoice { bool active = false, released = false; int note = 0; uint32_t age = 0; const SampleSet::Rec* rec = nullptr; double pr = 1;
+                      double wait = 0, u = 0; float sw = 1, amp = 0, att = .1f, panL = .707f, panR = .707f, relG = 1, relCoef = 1, stopAt = 1e9f; };
+    RevVoice revs[kMaxRev];
+    void reverseNote (int note, int vel);
+    void renderRev (RevVoice& v, int n);
+    void letGo (int note);
+    std::vector<float> busR[2];
+    Biquad rDamp;
+    /* the PLATE: a convolver playing a plate's ring made here (plateIR); a new DECAY makes a new ring in the other slot and the
+       sound moves across to it, so the old ring dies away untouched; nothing runs until it is first switched on */
+    struct PlateSlot { PartConv c[2]; float scale = 0, T = -1; Smooth in; bool live = false; double ringUntil = 0; };
+    PlateSlot plates[2]; int plNow = -1, plMaking = -1;
+    struct PlateGen { float T = 0; int len = 0, made = 0; float aL = 0, aH = 0, kL = 0, kM = 0, kH = 0, kA = 0; float lo[2] = {}, lh[2] = {}, gL[2] = {}, gM[2] = {}, gH[2] = {}, ga[2] = {}; double e = 0; } pg;
+    float plWantT = -1; double plWantSince = 0;
+    Biquad plHp, plLp; Delay plPreL, plPreR; Smooth gPlIn, gPlOut, gPlPre, dkL;
+    std::vector<float> piece;
+    double now = 0;                                     // seconds since prepare
+    void plateMaintain();
     Settings S;
     double rate = 44100.0, tempo = 120.0;
     uint32_t clock = 0;

@@ -30,11 +30,13 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 8.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return "HORIZON"; }
+    /* HORIZON's presets (Presets.h) are the plugin's programs: the DAW's preset list and the face's ‹ › */
+    int getNumPrograms() override;
+    int getCurrentProgram() override { return currentProgram.load(); }
+    void setCurrentProgram (int i) override;
+    const juce::String getProgramName (int i) override;
     void changeProgramName (int, const juce::String&) override {}
+    std::atomic<int> currentProgram { 0 };
 
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
@@ -42,6 +44,7 @@ public:
     juce::AudioProcessorValueTreeState state;
     horizon::Engine engine;
     std::shared_ptr<SampleLibrary> library;
+    std::shared_ptr<PadLibrary> padLibrary;
     std::atomic<bool> panicNow { false };            // PANIC on the face: every note stopped on the next block
 
     /* a parameter's value as text for the DAW (the same words HORIZON's face shows) */

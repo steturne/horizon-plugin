@@ -42,6 +42,7 @@ juce_add_plugin(Horizon
 
 target_sources(Horizon PRIVATE
     core/HorizonEngine.cpp
+    core/HaloPad.cpp
     plugin/PluginProcessor.cpp
     plugin/PluginEditor.cpp
     plugin/SampleLibrary.cpp)

@@ -76,3 +76,13 @@ void SampleLibrary::run()
     ready.store (owned.get(), std::memory_order_release);
     setStatus ({});
 }
+
+std::shared_ptr<PadLibrary> PadLibrary::get()
+{
+    static std::mutex m;
+    static std::weak_ptr<PadLibrary> shared;
+    std::lock_guard<std::mutex> g (m);
+    auto p = shared.lock();
+    if (! p) { p = std::shared_ptr<PadLibrary> (new PadLibrary()); shared = p; }
+    return p;
+}

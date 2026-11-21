@@ -28,6 +28,11 @@ static juce::WebBrowserComponent::Options webOptions (HorizonProcessor& proc, st
         .withKeepPageLoadedWhenBrowserIsHidden()
         .withNativeFunction ("panic", [&proc] (const juce::Array<juce::var>&, juce::WebBrowserComponent::NativeFunctionCompletion done)
                              { proc.panicNow = true; done (juce::var (true)); })
+        .withNativeFunction ("preset", [&proc] (const juce::Array<juce::var>& a, juce::WebBrowserComponent::NativeFunctionCompletion done)
+                             {   /* the face's ‹ ›: the next or the one before */
+                                 const int n = proc.getNumPrograms(), d = a.size() > 0 ? (int) a[0] : 1;
+                                 proc.setCurrentProgram (((proc.getCurrentProgram() + d) % n + n) % n);
+                                 done (juce::var (proc.getProgramName (proc.getCurrentProgram()))); })
         .withResourceProvider (std::move (provider));
     for (auto& r : s) o = o.withOptionsFrom (*r);
     for (auto& r : t) o = o.withOptionsFrom (*r);
@@ -91,6 +96,9 @@ void HorizonEditor::timerCallback()
     const int h = proc.engine.hits();
     if (h != lastHits) { lastHits = h; o->setProperty ("hit", proc.engine.lastHitVelocity()); }
     o->setProperty ("status", proc.library->status());
+    o->setProperty ("preset", proc.getProgramName (proc.getCurrentProgram()));
+    o->setProperty ("pi", proc.getCurrentProgram());
+    o->setProperty ("pn", proc.getNumPrograms());
     web.emitEventIfBrowserIsVisible ("sky", juce::var (o));
 }
 

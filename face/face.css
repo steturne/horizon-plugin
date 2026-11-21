@@ -76,3 +76,7 @@ html,body{margin:0;height:100%;background:#05080F;overflow:hidden}
 .hz .more .two{display:flex;flex-direction:column;gap:4px;justify-content:center}
 .hz .more .kr{display:flex;align-items:start;gap:0}.hz .more .kr>i{padding-top:13px}
 .hz .soon{font-size:9px;letter-spacing:1.2px;color:#FFD2BC;opacity:.9;text-align:center;line-height:1.3;align-self:center}
+/* the preset, with ‹ › either side of the screen */
+.hz .pre{display:flex;align-items:center;gap:2px}
+.hz .pre i{font-style:normal;font-size:20px;color:#FFE2D0;cursor:pointer;padding:4px 8px;border-radius:8px}.hz .pre i:hover{background:rgba(255,255,255,.1)}
+.hz .pre i.down{transform:translateY(1px);filter:brightness(.8)}

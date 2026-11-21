@@ -102,7 +102,7 @@ const DEFK = { level: .75, damp: .6, release: .25, 'tube.drive': .3, 'tube.warmt
 for (const [k, v] of Object.entries(SHAPE0)) DEFK['shape.' + k] = v;
 for (const k of ['swell', 'tone', 'width', 'amt', 'speed', 'space', 'tex', 'sub', 'air', 'spark']) DEFK['pad.P.' + k] = HALO_DEF[k];
 /* what does not sound yet in the plugin (coming in its next steps): its controls work and are kept, the screen says so */
-const SOON = k => /^(pad\.|s:pad|pp\.|pc\.|pm\.|pv\.|pr\.|po\.|dk\.|dr\.)/.test(k);
+const SOON = k => false;   /* (everything sounds now; kept for anything new that is shown before it sounds) */
 
 /* ---- the plugin's parameters (Params.h), each a JUCE state; in a plain browser, a stand-in keeping its own value ---- */
 const TOGGLES = { rev_on: 0, rev_sync: 0, rev_rings: 1, tube_on: 0, tape_on: 0, del_on: 0, del_sync: 1, verb_on: 1, verb_freeze: 0, plate_on: 0, chan_mono: 0, pad_on: 0,
@@ -171,7 +171,7 @@ m.querySelector('.ui').innerHTML = `<div class="credit glass">Piano: Salamander 
   <div class="corner glass"><span class="cb panic" data-b="panic" title="PANIC: every note stops">PANIC</span></div>
   <div class="pane glass none"></div>
   <div class="bar glass"><span class="word">HORIZON</span><span class="dots"><span class="dot"><i data-l="pedal"></i>PEDAL</span><span class="dot"><i data-l="kin"></i>KEYS IN</span></span><span class="sep"></span>
-    <span class="lcd"><b></b><span></span></span><span class="sep"></span>
+    <span class="pre"><i data-b="prev" title="the preset before">‹</i><span class="lcd"><b></b><span></span></span><i data-b="next" title="the next preset">›</i></span><span class="sep"></span>
     <span class="pill"><span data-b="p.on">PIANO</span><span data-b="p.fx">FX ONLY</span><span data-b="p.off">OFF</span></span><span class="sep"></span>
     ${[['shaper', 'SHAPER', '#FF7A3C'], ['reverse', 'REVERSE', '#FF7A3C'], ['pad', 'PAD', '#C29BFF'], ['effects', 'EFFECTS', '#7AB8FF'], ['chan', 'CHANNEL', '#D8D8E8'], ['stage', 'STAGE', '#FFE7A8']].map(([d, l, c]) => `<span class="mod" data-m="${d}" style="--c:${c}">${l}</span>`).join('')}
     <span class="sep"></span>${knob('chan.out', 'tk')}</div>`;
@@ -194,11 +194,11 @@ function layout() { const st = view === 'stage', isOpen = st || !!open;
 function openDrawer(id) { if (id === 'stage') view = view === 'stage' ? 'simple' : 'stage'; else { if (view === 'stage') view = 'simple'; open = open === id ? '' : id; } layout(); }
 
 /* ---- the screen: what is playing, or a knob's value while it turns ---- */
-let status = IN_PLUGIN ? 'TUNING...' : '', flashT = 0, flashing = false;
+let status = IN_PLUGIN ? 'TUNING...' : '', flashT = 0, flashing = false, preset = { name: 'HORIZON', i: 0, n: 0 };
 const lines = (a, b) => { $('.lcd b').textContent = a || ''; $('.lcd span').textContent = b || ''; };
 function show() { if (flashing) return;
   if (status) return lines(status.startsWith('NO') ? 'NO PIANO' : 'TUNING THE PIANO', status);
-  lines('HORIZON', ['PIANO ON', 'FX ONLY', 'PIANO OFF'][cho('piano')] + ' · PLAY FROM YOUR KEYBOARD'); }
+  lines(preset.name.toUpperCase(), ['PIANO ON', 'FX ONLY', 'PIANO OFF'][cho('piano')] + (preset.n ? ' · ' + (preset.i + 1) + ' / ' + preset.n : '')); }
 const flash = (a, b) => { flashing = true; lines(a, b); clearTimeout(flashT); flashT = setTimeout(() => { flashing = false; show(); }, 1500); };
 const soonNote = k => SOON(k) ? ' · SOUNDS IN A LATER STEP' : '';
 
@@ -239,7 +239,8 @@ let hamKeep = .8, susKeep = 0;
 function button(b) {
   const [g, x] = [b.slice(0, 2), b.slice(3)];
   if (x === 'name') return;   /* a name on a strip is only a label */
-  if (b === 'panic') { if (IN_PLUGIN) juce.getNativeFunction('panic')(); return flash('PANIC', 'EVERY NOTE STOPPED'); }
+  if (b === 'prev' || b === 'next') { if (IN_PLUGIN) juce.getNativeFunction('preset')(b === 'next' ? 1 : -1).then(n => flash(String(n).toUpperCase(), 'PRESET')); return; }
+  if (b === 'panic') { if (IN_PLUGIN) juce.getNativeFunction('panic')(); for (const d of ['root', 'fifth', 'oct', 'sub']) put('dr_' + d, 0); return flash('PANIC', 'EVERY NOTE STOPPED (AND THE DRONE)'); }
   if (b === 'sk.soft') { if (get('shape.hammer') >= .05) hamKeep = get('shape.hammer'); put('shape_hammer', 0); return flash('STRIKE', 'SOFT'); }
   if (b === 'sk.hard') { put('shape_hammer', get('shape.hammer') >= .05 ? get('shape.hammer') : hamKeep); return flash('STRIKE', 'HARD: ' + fmt('shape.hammer')); }
   if (b === 'tl.end') { if (get('shape.sustain') < .97) susKeep = get('shape.sustain'); put('shape_sustain', 1); return flash('TAIL', 'ENDLESS: IT RINGS WHILE THE KEY IS HELD'); }
@@ -345,6 +346,7 @@ function onSky(e) {
   light.pedal.classList.toggle('on', !!e.pedal);
   if (e.hit != null) { hit(+e.hit); light.kin.classList.add('on'); clearTimeout(kinT); kinT = setTimeout(() => light.kin.classList.remove('on'), 120); }
   if (e.status != null && String(e.status) !== status) { status = String(e.status); show(); }
+  if (e.preset != null && (e.preset !== preset.name || e.pi !== preset.i)) { preset = { name: String(e.preset), i: +e.pi || 0, n: +e.pn || 0 }; show(); }
 }
 function pretendNote() { pretend = Math.min(.6, pretend + .12); onSky({ level: 0, hit: 100 }); }
 if (IN_PLUGIN) window.__JUCE__.backend.addEventListener('sky', onSky);

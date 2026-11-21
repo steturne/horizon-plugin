@@ -268,6 +268,13 @@ void Engine::prepare (double sampleRate)
     piece.assign ((size_t) B, 0.0f);
     plNow = plMaking = -1; plWantT = -1;
     plPreL.setup ((int) (rate * .13)); plPreR.setup ((int) (rate * .13));
+    /* the PAD */
+    for (auto& b : padBuf) b.assign (64, 0.0f);
+    for (auto& h : padHeld) h = -1;
+    for (auto& d : droneOn) d = -1;
+    padWasOn = false; padQuietSince = -100;
+    if (padTables) { padTables->setRate (rate); pad.prepare (rate, padTables); }
+    gPadRev.setup (rate, .05); dkP.setup (rate, .05);
     for (auto* s : { &gPlIn, &gPlOut, &gPlPre, &dkL }) s->setup (rate, .05);
     gPlIn.setup (rate, .02); gPlPre.setup (rate, .03);
     for (auto* s : { &gPiano, &gSpark, &gStrike, &gGate, &gDelIn, &gVerbIn, &gD, &gV, &gShim, &gTapeWet, &gWow, &gFlutter, &gHiss, &gChDry, &gChMake,
@@ -428,6 +435,39 @@ void Engine::update (int)
     plHp.set (Biquad::highpass, rate, plLow (pl.low), .6f); plLp.set (Biquad::lowpass, rate, plHigh (pl.high), .6f);
     gPlIn.target = pl.on ? 1.0f : 0.0f; gPlOut.target = pl.mix * 4; dkL.target = pl.duck;
     gPlPre.target = (float) std::max (0.0, pl.pre * .12 * rate - plates[0].c[0].pieceSize());
+    /* the PAD: HALO's sound (its level is LEVEL), its LOW CUT, INTO HALL, DUCK; the DRONE's LEVEL */
+    const auto& pd = P.pad;
+    padLow.set (Biquad::highpass, rate, pd.low > .02f ? 30 * std::pow (13.0f, pd.low) : 20.0f, .5f);
+    gPadRev.target = pd.rev * 1.2f; dkP.target = pd.duck;
+    if (padTables && (pd.on || pd.root || pd.fifth || pd.octave || pd.sub || pad.busy()))   // (unused, the PAD asks for no tables)
+    {
+        HaloPad::Params hp;
+        for (int i = 0; i < 8; ++i) { hp.ch[i] = pd.ch[i]; hp.lv[i] = pd.lv[i]; }
+        bool any = false; for (bool b : hp.ch) any = any || b;
+        if (! any) hp.ch[0] = true;                     // always one character
+        hp.motion = pd.motion; hp.voicing = pd.voicing; hp.tone = pd.tone; hp.width = pd.width; hp.swell = pd.swell; hp.amt = pd.amt;
+        hp.space = pd.space; hp.tex = pd.tex; hp.speed = pd.speed; hp.sub = pd.subLv; hp.air = pd.air; hp.spark = pd.spark; hp.vol = pd.level;
+        pad.setParams (hp, tempo);
+        pad.setDroneLevel (dlvOf (pd.dlevel));
+    }
+}
+
+/* the PAD switched off lets its held notes go (the drone stays); the DRONE's notes follow its switches and its KEY */
+void Engine::padSync()
+{
+    if (! padTables) return;
+    if (! S.pad.on && padWasOn) for (auto& h : padHeld) if (h >= 0) { pad.noteOff (h, false); h = -1; }
+    padWasOn = S.pad.on;
+    static const int off[4] = { 0, 7, 12, -12 };
+    const bool want[4] = { S.pad.root, S.pad.fifth, S.pad.octave, S.pad.sub };
+    for (int k = 0; k < 4; ++k)
+    {
+        const int note = want[k] ? 48 + S.pad.key + off[k] : -1;
+        if (note == droneOn[k]) continue;
+        if (droneOn[k] >= 0) pad.noteOff (droneOn[k], true);
+        if (note >= 0) pad.noteOn (note, 92, true);
+        droneOn[k] = note;
+    }
 }
 
 /* ---- the voices ---- */
@@ -461,7 +501,14 @@ void Engine::noteOn (int n, int vel)
     if (vel <= 0) { noteOff (n); return; }
     down[n] = true; sus[n] = false;
     for (auto& v : voices) if (v.active && v.note == n && ! v.released) release (v, .08f);   // the string struck again
-    if (S.piano == 2 || ! ready()) return;
+    /* the PAD, played by the same key (whatever the PIANO switch says) */
+    if (padTables && S.pad.on && ! (S.pad.range == 1 && n >= 60))
+    {
+        if (padHeld[n] >= 0) pad.noteOff (padHeld[n], false);
+        const int m = std::max (12, std::min (120, n + 12 * (S.pad.oct - 1)));
+        pad.noteOn (m, std::min (127, vel), false); padHeld[n] = m;
+    }
+    if (S.piano == 2 || ! ready()) { hitVel.store (vel, std::memory_order_relaxed); hitCount.fetch_add (1, std::memory_order_relaxed); return; }
     const bool backOnly = S.rev.on && S.rev.kind == 0;                        // REVERSE BACK: the backwards note is the note
     if (! backOnly) { Voice& v = freeVoice(); start (v, n, std::min (127, vel)); }
     if (S.rev.on) reverseNote (n, std::min (127, vel));
@@ -471,6 +518,7 @@ void Engine::noteOn (int n, int vel)
 /* every voice of a key let go (the strike always; the backwards ones only when RINGS ON is off: E.noteOff) */
 void Engine::letGo (int n)
 {
+    if (padHeld[n] >= 0) { pad.noteOff (padHeld[n], false); padHeld[n] = -1; }
     const float rel = relOf (S.release);
     for (auto& v : voices) if (v.active && v.note == n && ! v.released) release (v, rel);
     if (! S.rev.rings)
@@ -550,6 +598,7 @@ void Engine::renderRev (RevVoice& v, int n)
 
 void Engine::allNotesOff()
 {
+    if (padTables) { pad.killAll(); for (auto& h : padHeld) h = -1; for (auto& d : droneOn) d = -1; }
     for (auto& r : revs) r.active = false;
     for (auto& v : voices) if (v.active) kill (v, .02f);
     pedalOn = false; pedalIsDown.store (false);
@@ -753,6 +802,14 @@ void Engine::render (float* outL, float* outR, int total)
         for (auto* b : { busS, busT, busG, busR }) for (int c = 0; c < 2; ++c) std::fill (b[c].begin(), b[c].begin() + n, 0.0f);
         if (ready()) { for (auto& v : voices) if (v.active) renderVoice (v, n); for (auto& r : revs) if (r.active) renderRev (r, n); }
         const bool plateLive = plates[0].live || plates[1].live;
+        /* the PAD: run while it sounds and for its hall's ring after (silent a while, it costs nothing) */
+        for (auto& b : padBuf) std::fill (b.begin(), b.begin() + n, 0.0f);
+        if (padTables)
+        {
+            padSync();
+            if (pad.busy()) padQuietSince = now;
+            if (now - padQuietSince < 14) pad.render (padBuf[0].data(), padBuf[1].data(), n);
+        }
 
         for (int i = 0; i < n; ++i)
         {
@@ -787,8 +844,12 @@ void Engine::render (float* outL, float* outR, int total)
             const float dIn = gDelIn.next();
             float delL = dIn * (o[0][0] * sD + o[1][0] * tD + rl), delR = dIn * (o[0][1] * sD + o[1][1] * tD + rr);
             float vL = o[0][0] * sR + o[1][0] * tR + rl, vR = o[0][1] * sR + o[1][1] * tR + rr;
-            /* the PLATE's send: the piano's two halves (heard or not), the backwards notes, the echoes (added below) */
-            float pL = o[0][0] + o[1][0] + rl, pR = o[0][1] + o[1][1] + rr;
+            /* the PAD: heard as it is (FX ONLY never silences it), its LOW CUT and DUCK; into the hall by INTO HALL */
+            const float padDk = 1 + dkP.next() * duckNow, gpr = gPadRev.next();
+            const float ql = padLow.tick (padBuf[0][(size_t) i], 0) * padDk, qr = padLow.tick (padBuf[1][(size_t) i], 1) * padDk;
+            L += ql; R += qr; vL += ql * gpr; vR += qr * gpr;
+            /* the PLATE's send: the piano's two halves (heard or not), the backwards notes, the pad, the echoes (added below) */
+            float pL = o[0][0] + o[1][0] + rl + ql, pR = o[0][1] + o[1][1] + rr + qr;
             /* DUCK: how loud the piano plays (both halves, heard or not), a slow envelope; a firm note ducks fully, a fading ring a little */
             {
                 const float eL = duckEnv.tick (std::abs (o[0][0] + o[1][0]), 0), eR = duckEnv.tick (std::abs (o[0][1] + o[1][1]), 1);

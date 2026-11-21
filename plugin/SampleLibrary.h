@@ -28,3 +28,16 @@ private:
     juce::CriticalSection lock;
     juce::String message { "TUNING..." };
 };
+
+/* the PAD's tables (HALO's PADsynth loops), shared by every HORIZON open in the same DAW, and the background thread that makes
+   them as notes ask for them (each takes a few milliseconds: never on the audio thread). No memory is taken until the PAD is used. */
+class PadLibrary : private juce::Thread
+{
+public:
+    static std::shared_ptr<PadLibrary> get();
+    ~PadLibrary() override { stopThread (4000); }
+    horizon::PadTables tables;
+private:
+    PadLibrary() : juce::Thread ("HORIZON pad") { startThread (juce::Thread::Priority::low); }
+    void run() override { while (! threadShouldExit()) if (! tables.work()) wait (10); }
+};

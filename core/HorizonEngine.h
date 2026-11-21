@@ -23,6 +23,7 @@
 #include <vector>
 #include "Convolver.h"
 #include "Dsp.h"
+#include "HaloPad.h"
 #include "HorizonSettings.h"
 
 namespace horizon {
@@ -150,6 +151,20 @@ private:
     double now = 0;                                     // seconds since prepare
     void plateMaintain();
     std::atomic<const SampleSet*> samples { nullptr };
+    /* the PAD (HALO) and the DRONE: played by the same keys (all, or the left hand: below middle C), an octave up or down; the
+       drone's notes (ROOT FIFTH OCTAVE SUB in its KEY) sound on their own, through the DRONE's LEVEL */
+    PadTables* padTables = nullptr;
+    HaloPad pad;
+    int padHeld[128];                                   // the note the pad plays for each key held, or -1
+    int droneOn[4] = { -1, -1, -1, -1 };                // the drone's notes sounding (ROOT FIFTH OCTAVE SUB), or -1
+    bool padWasOn = false;
+    double padQuietSince = 0;
+    std::vector<float> padBuf[2];
+    Biquad padLow; Smooth gPadRev, dkP;
+    void padSync();
+public:
+    /* the PAD's tables and the thread that makes them belong to the plugin (shared by every HORIZON); set before prepare */
+    void setPadTables (PadTables* t) { padTables = t; }
     Settings S;
     double rate = 44100.0, tempo = 120.0;
     uint32_t clock = 0;

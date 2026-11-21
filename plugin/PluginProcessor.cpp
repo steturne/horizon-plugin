@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Presets.h"
 
 using namespace horizon;
 
@@ -25,9 +26,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout HorizonProcessor::layout()
 HorizonProcessor::HorizonProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       state (*this, nullptr, "HORIZON", layout()),
-      library (SampleLibrary::get())
+      library (SampleLibrary::get()), padLibrary (PadLibrary::get())
 {
     for (const auto& d : hzp::kParams) rawById[d.id] = state.getRawParameterValue (d.id);
+    setCurrentProgram (0);                           // a new HORIZON opens with "Dry piano", as in Mixtape
 }
 
 HorizonProcessor::~HorizonProcessor() = default;
@@ -116,6 +118,7 @@ juce::String HorizonProcessor::textOf (const juce::String& id, float v) const
 void HorizonProcessor::prepareToPlay (double sampleRate, int)
 {
     Settings s; fill (s); engine.setSettings (s);
+    engine.setPadTables (&padLibrary->tables);
     engine.prepare (sampleRate);
 }
 
@@ -175,7 +178,36 @@ void HorizonProcessor::getStateInformation (juce::MemoryBlock& dest)
 void HorizonProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
-        if (xml->hasTagName (state.state.getType())) state.replaceState (juce::ValueTree::fromXml (*xml));
+        if (xml->hasTagName (state.state.getType())) { state.replaceState (juce::ValueTree::fromXml (*xml)); currentProgram = juce::jlimit (0, hzp::kNumPresets - 1, (int) state.state.getProperty ("preset", 0)); }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new HorizonProcessor(); }
+
+/* ---- the presets ---- */
+int HorizonProcessor::getNumPrograms() { return hzp::kNumPresets; }
+
+const juce::String HorizonProcessor::getProgramName (int i) { return i >= 0 && i < hzp::kNumPresets ? juce::String (hzp::kPresets[i].name) : juce::String(); }
+
+/* every control back where it starts, then the preset's own settings over it (as horizon.js PV does), and its PAD sound */
+void HorizonProcessor::setCurrentProgram (int i)
+{
+    if (i < 0 || i >= hzp::kNumPresets) return;
+    auto set = [this] (const char* id, float v) { if (auto* p = state.getParameter (id)) p->setValueNotifyingHost (p->convertTo0to1 (v)); };
+    for (const auto& d : hzp::kParams) set (d.id, d.def);
+    const auto& pr = hzp::kPresets[i];
+    for (const auto& s : pr.set) set (s.first, s.second);
+    if (pr.pad >= 0)
+    {
+        const auto& ps = hzp::kPadSounds[pr.pad];
+        set ("pad_on", 1); set ("pad_preset", (float) pr.pad);
+        for (int c = 0; c < 8; ++c) set ((juce::String ("pad_ch_") + hzp::kChars[c]).toRawUTF8(), (ps.chars >> c) & 1 ? 1.0f : 0.0f);
+        set ("pad_lv_glass", ps.glassLv); set ("pad_lv_air", ps.airLv); set ("pad_lv_strings", ps.stringsLv);
+        set ("pad_voicing", (float) ps.voicing); set ("pad_motion", (float) ps.motion);
+        set ("pad_tone", ps.tone); set ("pad_width", ps.width); set ("pad_swell", ps.swell); set ("pad_amt", ps.amt); set ("pad_space", ps.space);
+        set ("pad_tex", ps.tex); set ("pad_speed", ps.speed); set ("pad_sub", ps.sub); set ("pad_air", ps.air); set ("pad_spark", ps.spark);
+        for (const auto& s : pr.padSet) set (s.first, s.second);
+    }
+    currentProgram = i;
+    state.state.setProperty ("preset", i, nullptr);
+    updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withProgramChanged (true));
+}

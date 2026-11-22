@@ -136,3 +136,6 @@ jobs:
           gh release create latest-build dl/*.zip --target "${{ github.sha }}" --prerelease \
             --title "HORIZON - latest build" \
             --notes "Built from ${{ github.sha }} on $(date -u '+%Y-%m-%d %H:%M UTC'). Install steps: see the README. The piano is the Salamander Grand Piano by Alexander Holm (CC BY 3.0)."
+          # gh makes the release as a draft, adds the zips, then publishes it; once that last step did not happen (the download
+          # links then went nowhere), so publish it again to be sure
+          gh release edit latest-build --draft=false --prerelease

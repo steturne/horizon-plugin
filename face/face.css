@@ -27,6 +27,10 @@ html,body{margin:0;height:100%;background:#05080F;overflow:hidden}
 .hz .cb{font-size:11px;letter-spacing:1.5px;padding:7px 11px;border-radius:10px;color:#EEF2FF;cursor:pointer}.hz .cb:hover{background:rgba(255,255,255,.1)}
 .hz .cb.panic{color:#FFC8BC}.hz .cb.panic:hover{background:rgba(160,40,30,.5)}
 .hz .mod.down,.hz .cb.down,.hz .pill span.down{transform:translateY(1px);filter:brightness(.8)}
+/* the window's own corner to drag (outside the scaled console, so it stays the same size) */
+.hz .grip{position:absolute;right:0;bottom:0;width:22px;height:22px;cursor:nwse-resize;z-index:5;opacity:.55;
+  background:linear-gradient(135deg,transparent 0 50%,rgba(255,255,255,.55) 50% 56%,transparent 56% 66%,rgba(255,255,255,.55) 66% 72%,transparent 72% 82%,rgba(255,255,255,.55) 82% 88%,transparent 88%)}
+.hz .grip:hover{opacity:1}
 .hz .credit{position:absolute;left:16px;top:14px;padding:6px 12px;border-radius:12px;font-size:10px;letter-spacing:1px;color:#DDE3F5;opacity:.7}
 /* the pane of glass a drawer's strips (or STAGE) rise on */
 .hz .pane{position:absolute;left:50%;bottom:88px;transform:translate(-50%,0);padding:12px;display:flex;flex-direction:column;align-items:center;transition:opacity .25s,transform .25s}

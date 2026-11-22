@@ -43,6 +43,9 @@ The newest build is always here (no GitHub account needed):
 
 The first note may take a few seconds while the piano loads (the window says **TUNING…**).
 
+**Window size:** it opens big (most of the screen). Make it bigger or smaller with **− +** at the top right, or drag the little
+corner at the bottom right. It remembers its size with the song.
+
 ## Installing on Windows (VST3)
 
 1. Download `HORIZON-Windows-VST3.zip`, right-click it > **Extract All**: you get a folder **HORIZON.vst3**.

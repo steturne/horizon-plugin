@@ -14,6 +14,7 @@ public:
     ~HorizonEditor() override;
     void paint (juce::Graphics&) override;
     void resized() override;
+    int sizeTo (int width);   /* the face's − + and corner grip */
 
 private:
     void timerCallback() override;
@@ -35,5 +36,6 @@ private:
     std::vector<std::unique_ptr<juce::WebToggleButtonParameterAttachment>> toggleAttach;
     std::vector<std::unique_ptr<juce::WebComboBoxParameterAttachment>> comboAttach;
     int lastHits = 0;
+    bool sized = false;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HorizonEditor)
 };

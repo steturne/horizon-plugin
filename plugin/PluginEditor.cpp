@@ -13,7 +13,7 @@ HorizonEditor::Relays::Relays()
 }
 
 /* the browser's options: every relay, PANIC (a function the page can call), the page's files */
-static juce::WebBrowserComponent::Options webOptions (HorizonProcessor& proc, std::vector<std::unique_ptr<juce::WebSliderRelay>>& s,
+static juce::WebBrowserComponent::Options webOptions (HorizonProcessor& proc, HorizonEditor* ed, std::vector<std::unique_ptr<juce::WebSliderRelay>>& s,
                                                       std::vector<std::unique_ptr<juce::WebToggleButtonRelay>>& t,
                                                       std::vector<std::unique_ptr<juce::WebComboBoxRelay>>& c,
                                                       juce::WebBrowserComponent::ResourceProvider provider)
@@ -33,6 +33,9 @@ static juce::WebBrowserComponent::Options webOptions (HorizonProcessor& proc, st
                                  const int n = proc.getNumPrograms(), d = a.size() > 0 ? (int) a[0] : 1;
                                  proc.setCurrentProgram (((proc.getCurrentProgram() + d) % n + n) % n);
                                  done (juce::var (proc.getProgramName (proc.getCurrentProgram()))); })
+        .withNativeFunction ("size", [ed] (const juce::Array<juce::var>& a, juce::WebBrowserComponent::NativeFunctionCompletion done)
+                             {   /* the face's − + and its corner grip: the window this wide (Live on the Mac has no way of its own) */
+                                 done (juce::var (ed->sizeTo (a.size() > 0 ? (int) a[0] : 1200))); })
         .withResourceProvider (std::move (provider));
     for (auto& r : s) o = o.withOptionsFrom (*r);
     for (auto& r : t) o = o.withOptionsFrom (*r);
@@ -42,7 +45,7 @@ static juce::WebBrowserComponent::Options webOptions (HorizonProcessor& proc, st
 
 HorizonEditor::HorizonEditor (HorizonProcessor& p)
     : AudioProcessorEditor (&p), proc (p),
-      web (webOptions (p, relays.sliders, relays.toggles, relays.combos, [] (const juce::String& url) { return resource (url); }))
+      web (webOptions (p, this, relays.sliders, relays.toggles, relays.combos, [] (const juce::String& url) { return resource (url); }))
 {
     size_t si = 0, ti = 0, ci = 0;
     for (const auto& d : hzp::kParams)
@@ -54,12 +57,14 @@ HorizonEditor::HorizonEditor (HorizonProcessor& p)
     }
     addAndMakeVisible (web);
     web.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
-    /* 16:9, as HORIZON's face. The size the window was last dragged to (kept with the song); the first time, big: 85% of the
-       screen's width (Steve found the first size a bit small on his MacBook), as long as it fits the screen's height */
-    setResizable (true, true);
+    /* 16:9, as HORIZON's face. The size the window was last left at (kept with the song); the first time, big: 85% of the
+       screen's width (Steve found the first size a bit small on his MacBook), as long as it fits the screen's height.
+       Read before setResizeLimits: that already sizes the window (to the smallest, 800 x 450) and resized() would keep it, which
+       is what made every window open small. New names ("winW"), so songs saved with that small size open big again. */
+    int w = (int) p.state.state.getProperty ("winW", 0), h = (int) p.state.state.getProperty ("winH", 0);
+    setResizable (true, false);   /* no JUCE corner: the page covers it; the face has its own (and − +) */
     setResizeLimits (800, 450, 2560, 1440);
     if (auto* c = getConstrainer()) c->setFixedAspectRatio (16.0 / 9.0);
-    int w = (int) p.state.state.getProperty ("editorW", 0), h = (int) p.state.state.getProperty ("editorH", 0);
     if (w < 800 || h < 450)
     {
         juce::Rectangle<int> area (0, 0, 1440, 900);
@@ -70,7 +75,19 @@ HorizonEditor::HorizonEditor (HorizonProcessor& p)
         w = juce::jmax (800, w); h = juce::jmax (450, h);
     }
     setSize (w, h);
+    sized = true;
     startTimerHz (30);
+}
+
+/* the window this wide (16:9), no smaller than 800 and no bigger than the screen it is on */
+int HorizonEditor::sizeTo (int w)
+{
+    juce::Rectangle<int> area (0, 0, 2560, 1440);
+    if (auto* d = juce::Desktop::getInstance().getDisplays().getDisplayForRect (getScreenBounds())) area = d->userArea;
+    const int most = juce::jmax (800, juce::jmin (2560, area.getWidth() - 20, (area.getHeight() - 50) * 16 / 9));   /* room for the DAW's title bar */
+    w = juce::jlimit (800, most, w);
+    setSize (w, w * 9 / 16);
+    return getWidth();
 }
 
 HorizonEditor::~HorizonEditor() { stopTimer(); }
@@ -80,9 +97,10 @@ void HorizonEditor::paint (juce::Graphics& g) { g.fillAll (juce::Colour (0xff050
 void HorizonEditor::resized()
 {
     web.setBounds (getLocalBounds());
-    /* remembered with the song, so the window opens at the size it was left */
-    proc.state.state.setProperty ("editorW", getWidth(), nullptr);
-    proc.state.state.setProperty ("editorH", getHeight(), nullptr);
+    /* remembered with the song, so the window opens at the size it was left (not while it is still being made) */
+    if (! sized) return;
+    proc.state.state.setProperty ("winW", getWidth(), nullptr);
+    proc.state.state.setProperty ("winH", getHeight(), nullptr);
 }
 
 /* 30 times a second: how loud it plays (the sky's aurora follows it), a key struck (its velocity: a pulse, now and then a surge),

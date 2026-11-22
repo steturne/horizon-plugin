@@ -168,7 +168,7 @@ function moreHTML(id) { const d = DETAILS[id], ln = ([l, bs]) => `<div class="ln
     ${d.bottom ? `<div class="two">${d.bottom.map(ln).join('')}</div>` : '<span></span>'}</div>`; }
 const m = document.querySelector('.hz');
 m.querySelector('.ui').innerHTML = `<div class="credit glass">Piano: Salamander Grand by Alexander Holm (CC BY 3.0)</div>
-  <div class="corner glass"><span class="cb panic" data-b="panic" title="PANIC: every note stops">PANIC</span></div>
+  <div class="corner glass"><span class="cb" data-b="smaller" title="a smaller window">−</span><span class="cb" data-b="bigger" title="a bigger window">+</span><span class="cb panic" data-b="panic" title="PANIC: every note stops">PANIC</span></div>
   <div class="pane glass none"></div>
   <div class="bar glass"><span class="word">HORIZON</span><span class="dots"><span class="dot"><i data-l="pedal"></i>PEDAL</span><span class="dot"><i data-l="kin"></i>KEYS IN</span></span><span class="sep"></span>
     <span class="pre"><i data-b="prev" title="the preset before">‹</i><span class="lcd"><b></b><span></span></span><i data-b="next" title="the next preset">›</i></span><span class="sep"></span>
@@ -240,6 +240,7 @@ function button(b) {
   const [g, x] = [b.slice(0, 2), b.slice(3)];
   if (x === 'name') return;   /* a name on a strip is only a label */
   if (b === 'prev' || b === 'next') { if (IN_PLUGIN) juce.getNativeFunction('preset')(b === 'next' ? 1 : -1).then(n => flash(String(n).toUpperCase(), 'PRESET')); return; }
+  if (b === 'bigger' || b === 'smaller') return sizeTo(innerWidth * (b === 'bigger' ? 1.2 : 1 / 1.2));
   if (b === 'panic') { if (IN_PLUGIN) juce.getNativeFunction('panic')(); for (const d of ['root', 'fifth', 'oct', 'sub']) put('dr_' + d, 0); return flash('PANIC', 'EVERY NOTE STOPPED (AND THE DRONE)'); }
   if (b === 'sk.soft') { if (get('shape.hammer') >= .05) hamKeep = get('shape.hammer'); put('shape_hammer', 0); return flash('STRIKE', 'SOFT'); }
   if (b === 'sk.hard') { put('shape_hammer', get('shape.hammer') >= .05 ? get('shape.hammer') : hamKeep); return flash('STRIKE', 'HARD: ' + fmt('shape.hammer')); }
@@ -284,6 +285,10 @@ function stomp(s) {
 /* ---- the hands on it: knobs and faders (drag, scroll, double-click), buttons, switches, the drawers ---- */
 function turn(k, v) { const c = ctl(idOf(k)); c.set(clamp(v, 0, 1)); flash(KNAME[k] || k, fmt(k) + soonNote(k)); }
 m.addEventListener('pointerdown', e => { if (e.button) return; const t = e.target, d = t.dataset || {};
+  if (t === grip) { const x0 = e.screenX, y0 = e.screenY, w0 = innerWidth; e.preventDefault(); grip.setPointerCapture(e.pointerId);
+    const mv = ev => sizeTo(w0 + Math.max(ev.screenX - x0, (ev.screenY - y0) * 16 / 9), true),
+      up = () => { grip.removeEventListener('pointermove', mv); grip.removeEventListener('pointerup', up); };
+    grip.addEventListener('pointermove', mv); grip.addEventListener('pointerup', up); return; }
   if (d.k) { const k = d.k, y0 = e.clientY, u0 = +get(k) || 0, fd = t.closest('.fd'), c = ctl(idOf(k));
     const h = fd ? fd.querySelector('.track').getBoundingClientRect().height * .67 : t.closest('.kn').querySelector('.cap').getBoundingClientRect().height * 3.5;
     e.preventDefault(); c.begin();
@@ -299,6 +304,15 @@ m.addEventListener('dblclick', e => { const d = e.target.dataset || {}; if (d.k 
 
 /* ---- the face fills the window: laid out 1400 x 788, scaled to fit (as HORIZON's full screen) ---- */
 function fit() { const f = Math.min(innerWidth / 1400, innerHeight / 788); ui.style.transform = `translateX(-50%) scale(${f.toFixed(4)})`; }
+/* the window's size, from the face: − + in the corner, or the grip at the bottom right (Live on the Mac gives a plugin's window
+   no edge to drag). One ask at a time while dragging; the last width wins. */
+const grip = document.createElement('div'); grip.className = 'grip'; grip.title = 'drag to make the window bigger or smaller'; m.appendChild(grip);
+let sizing = false, sizeNext = 0;
+function sizeTo(w, quiet) { w = Math.round(w);
+  if (!IN_PLUGIN) return quiet || flash('WINDOW', 'BIGGER AND SMALLER IN THE PLUGIN');
+  if (sizing) { sizeNext = w; return; }
+  sizing = true; juce.getNativeFunction('size')(w).then(got => { sizing = false; if (!quiet) flash('WINDOW', got + ' × ' + Math.round(got * 9 / 16));
+    if (sizeNext) { const n = sizeNext; sizeNext = 0; sizeTo(n, quiet); } }, () => { sizing = false; }); }
 addEventListener('resize', () => { fit(); size(); }); fit();
 
 /* ---- the sky (as in HORIZON: its canvas three quarters of its size on the screen; 30 frames a second while it sounds, 8 at rest) ---- */
